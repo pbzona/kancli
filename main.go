@@ -19,6 +19,18 @@ const (
 	done
 )
 
+// Styling
+var (
+	columnStyle = lipgloss.NewStyle().
+			Padding(1, 2)
+	focusedStyle = lipgloss.NewStyle().
+			Padding(1, 2).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("62"))
+	helpStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241"))
+)
+
 // Custom item
 type Task struct {
 	status      status
@@ -41,10 +53,11 @@ func (t Task) Description() string {
 
 // * MAIN MODEL *
 type Model struct {
-	focused status
-	lists   []list.Model
-	err     error
-	loaded  bool
+	focused  status
+	lists    []list.Model
+	err      error
+	loaded   bool
+	quitting bool
 }
 
 func New() *Model {
@@ -53,7 +66,7 @@ func New() *Model {
 
 // TODO: call this on tea.WindowSizeMsg
 func (m *Model) initLists(width, height int) {
-	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height)
+	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height-divisor)
 	defaultList.SetShowHelp(false)
 	m.lists = []list.Model{defaultList, defaultList, defaultList}
 
@@ -89,6 +102,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.initLists(msg.Width, msg.Height)
 			m.loaded = true
 		}
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "q", tea.KeyCtrlC.String():
+			m.quitting = true
+			return m, tea.Quit
+		}
 	}
 	var cmd tea.Cmd
 	m.lists[m.focused], cmd = m.lists[m.focused].Update(msg)
@@ -96,15 +115,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	if m.loaded {
-		return lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			m.lists[todo].View(),
-			m.lists[inProgress].View(),
-			m.lists[done].View(),
-		)
+	if m.quitting {
+		return ""
 	}
-	return ""
+	if m.loaded {
+		todoView := m.lists[todo].View()
+		inProgView := m.lists[inProgress].View()
+		doneView := m.lists[done].View()
+
+		switch m.focused {
+		default:
+			return lipgloss.JoinHorizontal(
+				lipgloss.Left,
+				focusedStyle.Render(todoView),
+				columnStyle.Render(inProgView),
+				columnStyle.Render(doneView),
+			)
+		}
+	}
+	return "Loading..."
 }
 
 // do stuff
